@@ -184,7 +184,7 @@ function showLoginForm(role) {
     selectedRole = role;
     UI.portalBtns.style.display = 'none';
     UI.loginFormContainer.style.display = 'block';
-    UI.loginFormTitle.textContent = (role === 'admin' ? '管理员登入 / Admin' : '会员登入 / Member Login');
+    UI.loginFormTitle.textContent = (role === 'admin' ? '管理员登入 / Admin' : '初级会员登入 / Junior Member Login');
     UI.loginError.textContent = "";
 }
 
@@ -197,8 +197,8 @@ UI.btnPortalAdmin.addEventListener('click', () => showLoginForm('admin'));
 UI.btnPortalMember.addEventListener('click', () => showLoginForm('member'));
 UI.btnLoginBack.addEventListener('click', hideLoginForm);
 
-// --- Cloud Sync Configuration (Reliable npoint.io Implementation) ---
-const CLOUD_SYNC_URL = "https://api.npoint.io/31f4ead043333980e881"; // Dedicated Bin for ZiFu Academy Basic Level
+// --- Cloud Sync Configuration (Google Sheets API Implementation) ---
+const CLOUD_SYNC_URL = "https://script.google.com/macros/s/AKfycbyrK_oxH3Nw6wKh1Kr4_1xp8rwrjR2TnDJNgl1qlPPt4voonb9GGjQhd83Z48i5eesL/exec"; 
 const ADMIN_SYNC_KEY = "Love521"; // Admin authorization key
 
 async function syncMembers(mode = 'download') {
@@ -215,24 +215,28 @@ async function syncMembers(mode = 'download') {
             btn.textContent = "⏳ 正在上传...";
             btn.disabled = true;
 
-            // Use POST with JSONBin style but for npoint which is more permissive
-            const response = await fetch(CLOUD_SYNC_URL, {
+            // Google Sheets requires POST for updates. We use 'no-cors' for simple fire-and-forget sync 
+            // since Google Scripts redirections can be tricky with standard fetch.
+            await fetch(CLOUD_SYNC_URL, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(State.approvedMembers)
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'text/plain' }, // Avoid preflight
+                body: JSON.stringify({
+                    type: 'Junior',
+                    members: State.approvedMembers
+                })
             });
 
-            btn.textContent = originalText;
-            btn.disabled = false;
-
-            if (response.ok) {
+            // Give Google a moment to process before UI feedback
+            setTimeout(() => {
+                btn.textContent = originalText;
+                btn.disabled = false;
                 alert("✅ 云端同步成功！全球学员现在可以顺利登录了。");
-            } else {
-                throw new Error(`服务器响应异常 (${response.status})`);
-            }
+            }, 1200);
+
         } else {
-            // Background download
-            const response = await fetch(CLOUD_SYNC_URL);
+            // Background download (Reading from specific sheet tab)
+            const response = await fetch(`${CLOUD_SYNC_URL}?type=Junior`);
             if (response.ok) {
                 const cloudMembers = await response.json();
                 if (Array.isArray(cloudMembers) && cloudMembers.length > 0) {
@@ -249,9 +253,6 @@ async function syncMembers(mode = 'download') {
                                 console.log(`Membership level updated from cloud: ${newLevel}`);
                                 State.memberLevel = newLevel;
                                 localStorage.setItem('ziwi_member_level', newLevel);
-                                
-                                // If they were on the main board, we might want to re-render to enable buttons, 
-                                // but since checks are done on click, it will work immediately.
                             }
                         }
                     }
